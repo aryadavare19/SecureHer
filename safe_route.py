@@ -1,8 +1,9 @@
 import webbrowser
-from db_config import get_db_connection
+from db import get_connection
+
 
 def get_location_graph():
-    connection = get_db_connection()
+    connection = get_connection()
     cursor = connection.cursor()
 
     base_graph = {
@@ -71,7 +72,7 @@ def dijkstra(graph, start, destination):
     return path, distances[destination]
 
 def get_safe_route(start_name, destination_name):
-    connection = get_db_connection()
+    connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute("SELECT id, latitude, longitude FROM locations WHERE name = %s", (start_name,))
