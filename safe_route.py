@@ -107,6 +107,7 @@ def get_safe_route(start_name, destination_name):
     destination = f"{dest_lat},{dest_lon}"
     maps_link = f"{base_url}&origin={origin}&destination={destination}"
     
+
     print(f"Google Maps: {maps_link}")
     webbrowser.open(maps_link)
     cursor.close()
