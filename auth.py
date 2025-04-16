@@ -1,9 +1,9 @@
 import tkinter as tk
 from tkinter import messagebox
 from db import get_connection
-from main_menu import open_main_menu
+from session import current_user
+import main_menu
 
-current_user = [None]
 
 def signup():
     def submit_signup():
@@ -44,6 +44,7 @@ def signup():
     tk.Button(signup_window, text="Submit", command=submit_signup).grid(row=3, column=1)
 
 def login():
+    # auth.py
     def submit_login():
         name = name_entry.get()
         password = password_entry.get()
@@ -58,9 +59,13 @@ def login():
             current_user[0] = user
             messagebox.showinfo("Success", f"Welcome {user[1]}!")
             login_window.destroy()
-            open_main_menu(user)
+            
+            # Now pass the user object to the main menu
+            main_menu.open_main_menu(user)  # Pass the user object here
+
         else:
             messagebox.showerror("Error", "Invalid credentials.")
+
 
     login_window = tk.Toplevel()
     login_window.update_idletasks()
