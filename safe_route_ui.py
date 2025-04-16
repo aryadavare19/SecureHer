@@ -1,116 +1,47 @@
-import webbrowser
+# safe_route_ui.py
+import tkinter as tk
+from tkinter import messagebox
 from db import get_connection
+from safe_route import get_safe_route
 
-
-def get_location_graph():
-    connection = get_connection()
-    cursor = connection.cursor()
-
-    base_graph = {
-        1: {2: 10, 3: 15}, 2: {3: 25}, 3: {4: 30}, 4: {5: 5}, 5: {6: 20},
-        6: {7: 35}, 7: {8: 10}, 8: {9: 15}, 9: {10: 40}, 10: {11: 10},
-        11: {12: 25}, 12: {13: 5}, 13: {14: 20}, 14: {15: 15}, 15: {16: 25},
-        16: {17: 30}, 17: {18: 10}, 18: {19: 20}, 19: {20: 15}, 20: {21: 25},
-        21: {22: 20}, 22: {23: 10}, 23: {24: 25}, 24: {25: 30}, 25: {26: 5},
-        26: {27: 15}, 27: {28: 35}, 28: {29: 10}, 29: {30: 40}
-    }
-
-    cursor.execute("SELECT location_id, danger_score FROM location_danger")
-    danger_scores = dict(cursor.fetchall())
-
-    danger_penalty = 10
-
-    # Make graph robust by ensuring all involved node IDs are initialized
-    all_node_ids = set(base_graph.keys())
-    for neighbors in base_graph.values():
-        all_node_ids.update(neighbors.keys())
-
-    graph = {node: {} for node in all_node_ids}
-
-    for node, neighbors in base_graph.items():
-        for neighbor, base_weight in neighbors.items():
-            penalty = danger_scores.get(node, 0) * danger_penalty
-            graph[node][neighbor] = max(base_weight - penalty, 1)
-
+def fetch_location_names():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM locations ORDER BY id")
+    names = [row[0] for row in cursor.fetchall()]
     cursor.close()
-    connection.close()
-    return graph
+    conn.close()
+    return names
 
-def dijkstra(graph, start, destination):
-    distances = {node: float('inf') for node in graph}
-    previous = {node: None for node in graph}
-    visited = set()
-    distances[start] = 0
-
-    while len(visited) < len(graph):
-        min_node = None
-        min_distance = float('inf')
-        for node in graph:
-            if node not in visited and distances[node] < min_distance:
-                min_distance = distances[node]
-                min_node = node
-        if min_node is None:
-            break
-        visited.add(min_node)
-        for neighbor, weight in graph[min_node].items():
-            if neighbor in visited:
-                continue
-            new_dist = distances[min_node] + weight
-            if new_dist < distances[neighbor]:
-                distances[neighbor] = new_dist
-                previous[neighbor] = min_node
-
-    path = []
-    current = destination
-    while current is not None:
-        path.insert(0, current)
-        current = previous[current]
-
-    if distances[destination] == float('inf'):
-        return None, float('inf')
-    
-    return path, distances[destination]
-
-def get_safe_route(start_name, destination_name):
-    connection = get_connection()
-    cursor = connection.cursor()
-
-    cursor.execute("SELECT id, latitude, longitude FROM locations WHERE name = %s", (start_name,))
-    start_row = cursor.fetchone()
-    if not start_row:
-        print(f"❌ Start location '{start_name}' not found.")
-        return
-    start_id, start_lat, start_lon = start_row
-
-    cursor.execute("SELECT id, latitude, longitude FROM locations WHERE name = %s", (destination_name,))
-    dest_row = cursor.fetchone()
-    if not dest_row:
-        print(f"❌ Destination location '{destination_name}' not found.")
-        return
-    dest_id, dest_lat, dest_lon = dest_row
-
-    graph = get_location_graph()
-    path_ids, total_distance = dijkstra(graph, start_id, dest_id)
-
-    if not path_ids:
-        print("⚠️ No route found.")
+def open_safe_route_window():
+    locations = fetch_location_names()
+    if not locations or len(locations) < 2:
+        messagebox.showerror("Error", "Not enough locations in the database.")
         return
 
-    coordinates = []
-    for loc_id in path_ids:
-        cursor.execute("SELECT latitude, longitude FROM locations WHERE id = %s", (loc_id,))
-        lat, lon = cursor.fetchone()
-        coordinates.append(f"{lat},{lon}")
+    route_window = tk.Toplevel()
+    route_window.title("Safe Route Finder")
+    route_window.geometry("400x300")
 
-    base_url = "https://www.google.com/maps/dir/?api=1"
-    origin = f"{start_lat},{start_lon}"
-    destination = f"{dest_lat},{dest_lon}"
-    maps_link = f"{base_url}&origin={origin}&destination={destination}"
-    if len(coordinates) > 2:
-        waypoints = "|".join(coordinates[1:-1])
-        maps_link += f"&waypoints={waypoints}"
+    tk.Label(route_window, text="Start Location").pack(pady=5)
+    start_var = tk.StringVar()
+    start_var.set(locations[0])
+    tk.OptionMenu(route_window, start_var, *locations).pack()
 
-    print(f"Google Maps: {maps_link}")
-    webbrowser.open(maps_link)
-    cursor.close()
-    connection.close()
+    tk.Label(route_window, text="Destination").pack(pady=5)
+    dest_var = tk.StringVar()
+    dest_var.set(locations[1])
+    tk.OptionMenu(route_window, dest_var, *locations).pack()
+
+    def find_route():
+        start = start_var.get()
+        dest = dest_var.get()
+        if start == dest:
+            messagebox.showwarning("Invalid", "Start and destination cannot be the same.")
+            return
+        try:
+            get_safe_route(start, dest)
+        except Exception as e:
+            messagebox.showerror("Error", f"Error: {e}")
+
+    tk.Button(route_window, text="Get Safe Route", command=find_route).pack(pady=20)
